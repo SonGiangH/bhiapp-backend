@@ -34,15 +34,15 @@ public class SurveyDTO {
     private Float totalseen;
 
     @NotNull(message = "BUR/m cannot be empty")
-    @JsonProperty("burm")
-    private Float burm;
+    @JsonProperty("dlsWa")
+    private Float dlsWa;
 
     @NotNull(message = "BUR/30m cannot be empty")
-    @JsonProperty("bur30m")
-    private Float bur30m;
+    @JsonProperty("dls30m")
+    private Float dls30m;
 
-    @JsonProperty("incbit")
-    private Float incBit;
+    @JsonProperty("motorYield")
+    private Float motorYield;
 
     @JsonProperty("toolface")
     private String toolFace;

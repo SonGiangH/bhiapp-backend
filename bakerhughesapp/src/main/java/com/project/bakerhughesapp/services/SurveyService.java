@@ -4,6 +4,7 @@ import com.project.bakerhughesapp.dtos.SurveyDTO;
 import com.project.bakerhughesapp.models.Sliding;
 import com.project.bakerhughesapp.models.Survey;
 import com.project.bakerhughesapp.repositories.SurveyRepository;
+import com.project.bakerhughesapp.repositories.ToolRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ import java.util.Optional;
 public class SurveyService implements ISurveyService {
 
     private final SurveyRepository surveyRepository;
+    private final ToolRepository toolRepository;
 
     // create new survey
     @Override
@@ -28,11 +30,11 @@ public class SurveyService implements ISurveyService {
                 .surveyDepth(surveyDTO.getSurveyDepth())
                 .inc(surveyDTO.getInc())
                 .azi(surveyDTO.getAzi())
-                .bitDepth(surveyDTO.getBitDepth())
+                .bitDepth(surveyDTO.getBitDepth() + toolRepository.findById(1).orElseThrow().getSensorOffset())
                 .totalSeen(surveyDTO.getTotalseen())
-                .burm(surveyDTO.getBurm())
-                .bur30m(surveyDTO.getBur30m())
-                .incBit(surveyDTO.getIncBit())
+                .dlsWa(surveyDTO.getDlsWa())
+                .dls30m(surveyDTO.getDls30m())
+                .motorYield(surveyDTO.getMotorYield())
                 .toolFace(surveyDTO.getToolFace())
                 .ed(surveyDTO.getEd())
                 .st(surveyDTO.getSt())
@@ -63,17 +65,17 @@ public class SurveyService implements ISurveyService {
         // get survey by ID
         Survey existingSurvey = getSurveyById(surveyId);
 
-        // update with new survey needed information
-        existingSurvey.setBitDepth(surveyDTO.getBitDepth());
+        // update with new survey needed information (Survey Depth - Inclination - Azimuth - DLS WA)
+        existingSurvey.setBitDepth(surveyDTO.getSurveyDepth() + toolRepository.findById(1).orElseThrow().getSensorOffset());
         existingSurvey.setSurveyDepth(surveyDTO.getSurveyDepth());
         existingSurvey.setInc(surveyDTO.getInc());
         existingSurvey.setAzi(surveyDTO.getAzi());
-        existingSurvey.setTotalSeen(surveyDTO.getTotalseen());
-        existingSurvey.setBurm(surveyDTO.getBurm());
-        existingSurvey.setBur30m(surveyDTO.getBur30m());
-        existingSurvey.setIncBit(surveyDTO.getIncBit());
-        existingSurvey.setSlidSeen(surveyDTO.getSlidSeen());
-        existingSurvey.setSlidUnseen(surveyDTO.getSlidUnseen());
+        existingSurvey.setDlsWa(surveyDTO.getDlsWa());
+        // update sliding data
+        existingSurvey.setToolFace(surveyDTO.getToolFace());
+        existingSurvey.setSt(surveyDTO.getSt());
+        existingSurvey.setEd(surveyDTO.getEd());
+        existingSurvey.setTotalSlid(surveyDTO.getEd()-surveyDTO.getSt());
 
         return surveyRepository.save(existingSurvey);
     }
@@ -101,58 +103,19 @@ public class SurveyService implements ISurveyService {
         surveyRepository.truncateMyTable();
     }
 
-    // Create survey List to database
-    @Override
-    public List<Survey> createSurveyList(List<SurveyDTO> surveyDTOs) {
-        List<Survey> surveys = new ArrayList<>();
-
-        for (SurveyDTO surveyDTO: surveyDTOs) {
-            surveys.add(createSurvey(surveyDTO));
-        }
-        return surveys;
-    }
-
-    // Xu ly update khi input sliding data
+    // Update sliding data for existing survey
     @Override
     public Sliding updateSliding(Sliding sliding) {
 
-        // get all survey from db
-        List<Survey> surveyList = surveyRepository.findAll();
+        // get survey by ID
+        Survey existingSurvey = getSurveyById(sliding.getSurveyID());
 
-        List<Sliding> slidingList = new ArrayList<>();
+        // update with Sliding information
+        existingSurvey.setToolFace(sliding.getToolFace());
+        existingSurvey.setSt(sliding.getSt());
+        existingSurvey.setEd(sliding.getEd());
 
-        if (!surveyList.isEmpty()) {
-            for (Survey survey : surveyList) {
-                if (survey.getSt() == 0 || survey.getEd() == 0) {
-                    continue;
-                }
-
-                Sliding tempSliding = new Sliding();
-                tempSliding.setToolFace(survey.getToolFace());
-                tempSliding.setSt(survey.getSt());
-                tempSliding.setEd(survey.getEd());
-                slidingList.add(tempSliding);
-            }
-        }
-
-        Sliding newSlide = new Sliding();
-        newSlide.setToolFace(sliding.getToolFace());
-        newSlide.setSt(sliding.getSt());
-        newSlide.setEd(sliding.getEd());
-        slidingList.add(newSlide);
-
-        slidingList.sort(Comparator.comparingDouble(Sliding::getSt));
-
-        for (int i = 0; i < slidingList.size(); i++) {
-            Survey survey = surveyList.get(i);
-            Sliding slide = slidingList.get(i);
-            survey.setToolFace(slide.getToolFace());
-            survey.setSt(slide.getSt());
-            survey.setEd(slide.getEd());
-        }
-
-        surveyRepository.saveAll(surveyList);
-
-        return newSlide;
+        surveyRepository.save(existingSurvey);
+        return sliding;
     }
 }

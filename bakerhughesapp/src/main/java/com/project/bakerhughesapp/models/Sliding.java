@@ -9,6 +9,7 @@ import lombok.*;
 @NoArgsConstructor
 @Builder
 public class Sliding {
+    private Long surveyID;
     private String toolFace;
     private Float st;
     private Float ed;

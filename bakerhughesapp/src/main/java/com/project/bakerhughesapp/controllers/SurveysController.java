@@ -54,27 +54,6 @@ public class SurveysController {
         );
     }
 
-    // Insert List Of Surveys
-    @CrossOrigin(origins = "*")
-    @PostMapping("/list")
-    public ResponseEntity<ResponseObject> createListSurveys(
-                                            @RequestBody List<SurveyDTO> surveys,
-                                            BindingResult result) {
-        // Check error messages
-        if (result.hasErrors()) {
-            List<String> errorMessages = result.getFieldErrors()
-                    .stream()
-                    .map(FieldError::getDefaultMessage)
-                    .toList();
-
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
-                    new ResponseObject("Failed", "Unable to create survey list", errorMessages));
-        }
-
-        return ResponseEntity.status(HttpStatus.OK).body(
-                new ResponseObject("OK", "Create survey list successfully!", surveyService.createSurveyList(surveys)));
-    }
-
     //Show all surveys
     @CrossOrigin(origins = "*")
     @GetMapping("") //http://localhost:8088/api/v1/surveys
@@ -135,7 +114,7 @@ public class SurveysController {
         );
     }
 
-    // Update Sliding Data to existing survey
+    // Input Sliding data with given Survey ID
     @CrossOrigin(origins = "*")
     @PostMapping("/sliding")
     public ResponseEntity<ResponseObject> updateSliding(@RequestBody Sliding sliding,
@@ -155,179 +134,166 @@ public class SurveysController {
                 new ResponseObject("OK", "Update survey Sliding successfully!", surveyService.updateSliding(sliding)));
     }
 
-    // Find closest, so sanh list of depth with
-    private float findClosest(List<Float> floatList, float a) {
-        for (float d : floatList) {
-            if (d > a)
-                return d;
-        }
-        return 0;
-    }
-
-    // Calculator to update surveys
-    public List<Survey> calculateSurvey(List<Survey> surveys) {
+    // check seen - unseen and Total meter seen
+    public List<Survey> checkSeenUnseen(List<Survey> surveys) {
+        int singleLength = 14;
+        float meterSeen = 0;
         // get tool from database, if null set all properties = 0
         Tool tool = toolRepository.findById(1).orElseGet(() -> new Tool(1L, 0f, 0f));
 
-        if (surveys.isEmpty())
-            return surveys;
-
-        for (Survey survey : surveys) {
-            Survey item = surveyService.getSurveyById(survey.getId());
+        // loop through all survey inside given survey list
+        for (int i = 0; i < surveys.size(); i++) {
+            // get gia tri survey hien tai
+            Survey item = surveys.get(i);
 
             // Bit depth (sensor depth = tool.getSensorOffset)
-            survey.setBitDepth(survey.getSurveyDepth() + tool.getSensorOffset());
-            if (item != null) {
-                item.setBitDepth(survey.getBitDepth());
-                surveyRepository.save(item);
-            }
+            item.setBitDepth(item.getSurveyDepth() + tool.getSensorOffset());
+
+            item.setBitDepth(item.getBitDepth());
+            surveyRepository.save(item);
+
 
             // DP depth
-            if (survey.getId() == 1)
-                survey.setDpLength((float)0);
+            if (i == 0)
+                item.setDpLength((float)0);
             else {
-                Survey prevSlide = surveyRepository.findById(survey.getId() - 1).orElse(null);
+                Survey prevSlide = surveys.get(i - 1);
                 if (prevSlide != null) {
-                    float result = survey.getBitDepth() - prevSlide.getBitDepth();
+                    float result = item.getBitDepth() - prevSlide.getBitDepth();
 
-                    survey.setDpLength((float) (Math.floor(result * 100)) / 100);
-                    if (item != null) {
-                        item.setDpLength(survey.getDpLength());
-                        surveyRepository.save(item);
-                    }
+                    item.setDpLength((float) (Math.floor(result * 100)) / 100);
+                    item.setDpLength(item.getDpLength());
+                    surveyRepository.save(item);
                 }
             }
 
             // Total Slide distance
-            survey.setTotalSlid((float) (Math.floor((survey.getEd() - survey.getSt()) * 100)) / 100);
-            if (item != null) {
-                item.setTotalSlid(survey.getTotalSlid());
+            item.setTotalSlid((float) (Math.floor((item.getEd() - item.getSt()) * 100)) / 100);
+                item.setTotalSlid(item.getTotalSlid());
                 surveyRepository.save(item);
+
+            // Seen - Unseen (loop through all survey to check)
+            for (int j = 0; j < i ; j++) {
+                Survey survey1 = surveys.get(j);
+
+                if (survey1.getSlidSeen() != 0 && survey1.getSlidUnseen() != 0) {
+                    continue;
+                }
+
+                // item fall into between survey1 (St;End)
+                if ( item.getSurveyDepth() > survey1.getSt() &&
+                        item.getSurveyDepth() < survey1.getEd()) {
+
+                    survey1.setSlidSeen(item.getSurveyDepth()-survey1.getSt());
+                    survey1.setSlidUnseen(survey1.getTotalSlid() - survey1.getSlidSeen());
+                    surveyRepository.save(survey1);
+                } else if (item.getSurveyDepth() > survey1.getEd() && survey1.getEd() != 0) {
+                    survey1.setSlidSeen(survey1.getTotalSlid());
+                    survey1.setSlidUnseen((float) 0);
+                    surveyRepository.save(survey1);
+                } else {
+                    survey1.setSlidSeen((float) 0);
+                    survey1.setSlidUnseen((float) 0);
+                    surveyRepository.save(survey1);
+                }
             }
 
-            // SlideSeen || SlideIUnseen
-            List<Float> surveyList = surveyRepository.findAll().stream()
-                    .map(Survey::getSurveyDepth).toList();
+            /* Meter seen */
+            // Previous survey of item
+            for (int j = 0; j <=i; j++) {
 
-            float closest = findClosest(surveyList, survey.getSt());
+                // Survey dau tien trong lis total Seen = 0
+                if (i-1 <0) {
+                    item.setTotalSeen((float) 0);
+                    break;
+                }
 
-            if (closest == 0) {
-                survey.setSlidSeen((float) 0);
-                survey.setSlidUnseen((float) 0);
+                Survey previousSurvey = surveys.get(i - 1);
+
+                // Prev survey fall inside survey(j) (St -End)
+                if (surveys.get(j).getSt() < previousSurvey.getSurveyDepth() &&
+                        surveys.get(j).getEd() > previousSurvey.getSurveyDepth()) {
+                        meterSeen = surveys.get(j).getSlidUnseen();
+
+                        // check item - current survey
+                        if (surveys.get(j+1).getSt() < item.getSurveyDepth() &&
+                        surveys.get(j+1).getEd() > item.getSurveyDepth()) {
+                            meterSeen += surveys.get(j+1).getSlidSeen();
+                        }
+                        if ( surveys.get(j+1).getEd() < item.getSurveyDepth()) {
+                            meterSeen += surveys.get(j+1).getTotalSlid();
+                        }
+                        item.setTotalSeen(meterSeen);
+                        surveyRepository.save(item);
+                        break;
+                }
+
+                // item fall inside survey(j) St-End
+                if (surveys.get(j).getSt() < item.getSurveyDepth() &&
+                        surveys.get(j).getEd() > item.getSurveyDepth()) {
+                        meterSeen = surveys.get(j).getSlidSeen();
+
+                        for (int m =0; m <= i; m++) {
+                            if (previousSurvey.getSurveyDepth() > surveys.get(m).getSt() &&
+                                previousSurvey.getSurveyDepth() < surveys.get(m).getEd()) {
+                                meterSeen += surveys.get(m).getSlidUnseen();
+                            }
+                        }
+                        item.setTotalSeen(meterSeen);
+                        break;
+                }
+                else if (item.getSurveyDepth() > surveys.get(j).getEd() &&
+                        surveys.get(j).getEd() != 0 &&
+                        previousSurvey.getSurveyDepth() < surveys.get(j).getSt() &&
+                        surveys.get(j).getSt() !=0) {
+                            meterSeen = surveys.get(j).getTotalSlid();
+                            item.setTotalSeen(meterSeen);
+                            surveyRepository.save(item);
+                            break;
+                }
+
+            }
+
+            /*Calculate the DLS /30m */
+            if (i == 0) {
+                item.setDls30m((float) 0);
+            }
+            else {
+                Survey prevSurvey = surveys.get(i - 1);
+                if (prevSurvey != null) {
+                    float dls30m = calculateDLS(prevSurvey, item);
+                    item.setDls30m(dls30m);
+                    surveyRepository.save(item);
+                }
+            }
+
+            /* Calculate Motor Yield*/
+            if (item.getDls30m() == 0 || item.getTotalSeen() == 0 || i==0) {
+                item.setMotorYield((float) 0);
             } else {
-                if (survey.getEd() < closest) {
-                    survey.setSlidSeen(survey.getTotalSlid());
-                    survey.setSlidUnseen((float) 0);
-                } else {
-                    survey.setSlidSeen((float) Math.round((closest - survey.getSt()) * 100) / 100);
-                    survey.setSlidUnseen((float) Math.round((survey.getTotalSlid() - survey.getSlidSeen()) * 100) / 100);
-                }
-            }
-            if (survey.getEd() == 0) {
-                survey.setSlidSeen((float) 0);
-                survey.setSlidUnseen((float) 0);
-            }
-            if (item != null) {
-                item.setSlidSeen(survey.getSlidSeen());
-                item.setSlidUnseen(survey.getSlidUnseen());
+                Survey prevSurvey = surveys.get(i - 1);
+                float percentSlide = item.getTotalSeen() / (item.getSurveyDepth() - prevSurvey.getSurveyDepth());
+                float motorYield = item.getDls30m() / percentSlide;
+                item.setMotorYield(motorYield);
                 surveyRepository.save(item);
             }
 
-            // Meter seen
-            if (survey.getId() == 3) {
-                Survey prev2Survey = surveyRepository.findById(survey.getId() - 2).orElse(null);
-                if (prev2Survey != null) {
-                    survey.setTotalSeen(prev2Survey.getSlidSeen());
-                    if (item != null) {
-                        item.setTotalSeen(survey.getTotalSeen());
-                        surveyRepository.save(item);
-                    }
-                }
-            }
-            if (survey.getId() > 3) {
-                Survey prev3Slide = surveyRepository.findById(survey.getId() - 3).orElse(null);
-                Survey prev2Slide = surveyRepository.findById(survey.getId() - 2).orElse(null);
-                if (prev3Slide != null && prev2Slide != null) {
-                    survey.setTotalSeen((float) (Math.floor((prev3Slide.getSlidUnseen() + prev2Slide.getSlidSeen()) * 100)) / 100);
-                    if (item != null) {
-                        item.setTotalSeen(survey.getTotalSeen());
-                        surveyRepository.save(item);
-                    }
-                }
-            }
-
-            // Burm and Bur30m
-            if (survey.getId() > 1) {
-                // khi chua nhin thay meter seen -> lay gia tri default Motor Output
-                if (survey.getTotalSeen() == 0) {
-                    // get tool.defaultBur from database
-                    survey.setBur30m(tool.getDefaultBUR());
-                    survey.setBurm((float) (Math.floor(survey.getBur30m() * 100 / 30)) / 100);
-                } else {
-                    // nhin thay meter seen -> bur = Delta Inc  / meter seen
-                    float incDiff =
-                            Objects.requireNonNull(surveyRepository.findById(survey.getId()).orElse(null)).getInc()
-                            - Objects.requireNonNull(surveyRepository.findById(survey.getId() - 1).orElse(null)).getInc();
-
-                    float roundUpIncDiff = Math.round(incDiff * 100f) / 100f;
-                    float totalSeen = Objects.requireNonNull(surveyRepository.findById(survey.getId()).orElse(null)).getTotalSeen();
-
-
-                    survey.setBurm((float) Math.round((roundUpIncDiff / totalSeen)*100f) / 100f);
-                    survey.setBur30m((float) (Math.round((survey.getBurm() * 30) * 100f)) / 100f);
-                }
-                if (item != null) {
-                    item.setBurm(survey.getBurm());
-                    item.setBur30m(survey.getBur30m());
-                    surveyRepository.save(item);
-                }
-            }
-
-            // Inc at bit
-            if (survey.getId() == 2 || survey.getId() == 3) {
-                if (survey.getTotalSeen() == 0) {
-                    if (survey.getIncBit() == 0)
-                        survey.setIncBit((float)
-                                (Math.round(
-                                        (Objects.requireNonNull(surveyRepository.findById(survey.getId() - 1).orElse(null)).getTotalSlid()
-                                        * survey.getBurm() + survey.getInc()) * 100f)) / 100f);
-                } else {
-                    if (survey.getIncBit() == 0) {
-                        survey.setIncBit((float)
-                                (Math.round(
-                                        ((Objects.requireNonNull(surveyRepository.findById(survey.getId() - 2).orElse(null)).getSlidUnseen() +
-                                                Objects.requireNonNull(surveyRepository.findById(survey.getId() - 1).orElse(null)).getTotalSlid())
-                                        * survey.getBurm() + survey.getInc()) * 100f)) / 100f);
-                    }
-                }
-                if (item != null) {
-                    item.setIncBit(survey.getIncBit());
-                    surveyRepository.save(item);
-                }
-            }
-
-            // khi co 2 gia tri BUR lien tiep thi lay gia tri trung binh theo @ meter seen cua 2 gia tri do
-            if (survey.getId() > 3) {
-                Optional<Survey> prevslide1 = surveyRepository.findById(survey.getId() - 1);
-                assert prevslide1.orElse(null) != null;
-
-                float prev1Percent = Math.round(prevslide1.orElse(null).getTotalSeen() / (prevslide1.orElse(null).getTotalSeen() + survey.getTotalSeen()) * 10f) /10f;
-                float surveyPercent = 1 - prev1Percent;
-                // calculate average BUR base on total seen of each survey
-                float averageBur = prev1Percent * prevslide1.orElse(null).getBurm() + surveyPercent * survey.getBurm();
-
-                if (survey.getIncBit() == 0)
-                    survey.setIncBit((float) (Math.round(
-                            ((Objects.requireNonNull(surveyRepository.findById(survey.getId() - 1).orElse(null)).getTotalSlid()
-                                    + Objects.requireNonNull(surveyRepository.findById(survey.getId() - 2).orElse(null)).getSlidUnseen())
-                                    * averageBur + survey.getInc()) * 100f)) / 100f);
-                if (item != null) {
-                    item.setIncBit(survey.getIncBit());
-                    surveyRepository.save(item);
-                }
-            }
         }
-        return surveys;
+        return  surveys;
+    }
+
+    // calculate DLS of between 2 surveys
+    public Float calculateDLS(Survey surveyStart, Survey surveyEnd) {
+        float dls30m = 0;
+        double a = Math.sin(Math.toRadians(Math.abs(surveyEnd.getAzi() - surveyStart.getAzi()))) * surveyEnd.getInc();
+        double b = Math.sqrt(Math.pow(surveyEnd.getInc(), 2) - Math.pow(a, 2));
+        double c = b - surveyStart.getInc();
+
+        double dlsPerLength = Math.sqrt(Math.pow(a, 2) + Math.pow(c, 2));
+
+        dls30m = (float) (dlsPerLength * 30 / (surveyEnd.getSurveyDepth() - surveyStart.getSurveyDepth()));
+
+        return dls30m;
     }
 
     // Calculator Surveys
@@ -336,7 +302,7 @@ public class SurveysController {
     public ResponseEntity<ResponseObject> getAllCalculatorSurveys() {
         List<Survey> surveys = surveyService.getAllSurveys();
 
-         surveys = calculateSurvey(surveys);
+         surveys = checkSeenUnseen(surveys);
 
         return ResponseEntity.status(HttpStatus.OK).body(
                 new ResponseObject("ok", "Show all calculated surveys successfully !", surveys)

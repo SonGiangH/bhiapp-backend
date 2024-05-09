@@ -26,7 +26,5 @@ public interface ISurveyService {
 
     void truncateMyTable();
 
-    List<Survey> createSurveyList(List<SurveyDTO> surveyDTOs);
-
     Sliding updateSliding(Sliding sliding);
 }

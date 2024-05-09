@@ -35,14 +35,14 @@ public class Survey {
     @Column(name = "totalseen")
     private Float totalSeen;
 
-    @Column(name = "burm")
-    private Float burm;
+    @Column(name = "dlswa", nullable = false)
+    private Float dlsWa;
 
-    @Column(name = "bur30m")
-    private Float bur30m;
+    @Column(name = "dls30m")
+    private Float dls30m;
 
-    @Column(name = "incbit")
-    private Float incBit;
+    @Column(name = "motoryield")
+    private Float motorYield;
 
     @Column(name = "toolface")
     private String toolFace;
