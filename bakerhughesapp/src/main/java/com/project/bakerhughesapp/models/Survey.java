@@ -61,4 +61,7 @@ public class Survey {
 
     @Column(name = "slidunseen")
     private Float slidUnseen;
+
+    @Column(name = "meterahead")
+    private Float meterAhead;
 }

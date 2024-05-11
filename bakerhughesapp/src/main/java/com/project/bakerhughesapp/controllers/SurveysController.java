@@ -136,8 +136,8 @@ public class SurveysController {
 
     // check seen - unseen and Total meter seen
     public List<Survey> checkSeenUnseen(List<Survey> surveys) {
-        int singleLength = 14;
         float meterSeen = 0;
+        float meterAhead;
         // get tool from database, if null set all properties = 0
         Tool tool = toolRepository.findById(1).orElseGet(() -> new Tool(1L, 0f, 0f));
 
@@ -278,6 +278,52 @@ public class SurveysController {
                 surveyRepository.save(item);
             }
 
+            /* Calculate Meter Ahead */
+            // check between : item.surveyDepth -- item.bitDepth, check item.surveyDepth first
+            for (int j = 0; j <= i; j++) {
+
+                meterAhead = 0;
+                // Survey Depth fall inside sliding
+                if (item.getSurveyDepth() > surveys.get(j).getSt() &&
+                        item.getSurveyDepth()<surveys.get(j).getEd()) {
+                    meterAhead = surveys.get(j).getEd() - item.getSurveyDepth();
+
+                    // check Bit Depth - loop through surveys from j - i
+                    for (int m= j+1; m <= i; m++) {
+                        if (item.getBitDepth() > surveys.get(m).getEd()) {
+                            meterAhead += surveys.get(m).getTotalSlid();
+                        } else if (item.getBitDepth() > surveys.get(m).getSt() &&
+                                item.getBitDepth() < surveys.get(m).getEd()) {
+                            meterAhead += item.getBitDepth() - surveys.get(m).getSt();
+                        }
+                    }
+                    item.setMeterAhead(meterAhead);
+                    surveyRepository.save(item);
+                    break; // Exit the loop since we found the relevant survey
+                }
+
+
+                // Survey Depth fall outside sliding - cover sliding (fall above)
+                if (item.getSurveyDepth() < surveys.get(j).getSt()) {
+
+                    // check Bit Depth - loop through surveys from j-i
+                    for (int m=j; m <= i; m++) {
+                        // Bit Depth falling inside surveys m
+                        if (item.getBitDepth() > surveys.get(m).getSt() &&
+                                item.getBitDepth() < surveys.get(m).getEd()) {
+                            meterAhead = item.getBitDepth() - surveys.get(m).getSt();
+                        }
+                        // Bit depth exceed the sliding
+                        else if (item.getBitDepth() > surveys.get(m).getEd() &&
+                                surveys.get(m).getEd() != 0 ) {
+                            meterAhead = surveys.get(m).getTotalSlid();
+                        }
+                    }
+                    item.setMeterAhead(meterAhead);
+                    surveyRepository.save(item);
+                    break; // Exit the loop since we found the relevant survey
+                }
+            }
         }
         return  surveys;
     }

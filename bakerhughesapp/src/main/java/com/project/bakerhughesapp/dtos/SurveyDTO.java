@@ -66,4 +66,7 @@ public class SurveyDTO {
     @NotNull(message = "totalSlidUnseen cannot be empty")
     @JsonProperty("slidunseen")
     private Float slidUnseen;
+
+    @JsonProperty("meterahead")
+    private Float meterAhead;
 }

@@ -41,6 +41,7 @@ public class SurveyService implements ISurveyService {
                 .totalSlid(surveyDTO.getTotalSlid())
                 .slidSeen(surveyDTO.getSlidSeen())
                 .slidUnseen(surveyDTO.getSlidUnseen())
+                .meterAhead(surveyDTO.getMeterAhead())
                 .build();
 
         return surveyRepository.save(newSurvey);
@@ -75,7 +76,7 @@ public class SurveyService implements ISurveyService {
         existingSurvey.setToolFace(surveyDTO.getToolFace());
         existingSurvey.setSt(surveyDTO.getSt());
         existingSurvey.setEd(surveyDTO.getEd());
-        existingSurvey.setTotalSlid(surveyDTO.getEd()-surveyDTO.getSt());
+        existingSurvey.setTotalSlid((float) (Math.floor((surveyDTO.getEd() - surveyDTO.getSt()) * 100)) / 100);
 
         return surveyRepository.save(existingSurvey);
     }
